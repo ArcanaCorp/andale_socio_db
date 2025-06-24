@@ -16,12 +16,17 @@ app.use(cors());
 import indexRoutes from "./routes/index.routes.js";
 import authRoutes from './routes/auth.routes.js'
 import bussinesRoutes from './routes/bussines.routes.js'
+import partnersRoutes from './routes/partners.routes.js'
+import productsRoutes from './routes/product.routes.js'
 
 //USE ROUTERS USER
 app.use('/api/v1/', indexRoutes)
 app.use('/api/v1/', authRoutes)
 
 app.use('/api/v1/', bussinesRoutes)
+app.use('/api/v1/', partnersRoutes)
+
+app.use('/api/v1/', productsRoutes)
 
 // Manejo de errores
 app.use((err, req, res, next) => {

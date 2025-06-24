@@ -22,6 +22,33 @@ export const controllerGetInfo = async (req, res) => {
 
             if (info.length === 0) return res.status(403).json({ok: false, message: 'No hay datos sobre el negocio', error: '', code: 403})
 
+                const sqlProducts = 'SELECT p.*, pi.image_url, pi.is_main FROM products p INNER JOIN product_images pi ON p.id_product = pi.id_product WHERE p.sub_bussines = ? ORDER BY p.id_product, pi.is_main DESC'
+                const [productsData] = await pool.query(sqlProducts, [subBussines]);
+
+                // Agrupar imágenes por producto
+                const productsMap = new Map();
+
+                for (const row of productsData) {
+                    if (!productsMap.has(row.id_product)) {
+                        productsMap.set(row.id_product, {
+                            id: row.id_product,
+                            name: row.name_product,
+                            text: row.text_product,
+                            amount: row.amount_product,
+                            price:  Number(row.price_product),
+                            status: row.status_product,
+                            images: []
+                        });
+                    }
+
+                    productsMap.get(row.id_product).images.push({
+                        filename: row.image_url,
+                        is_main: row.is_main === 1
+                    });
+                }
+
+                const products = Array.from(productsMap.values());
+
                 const bussines = info.map((data) => ({
                     id: data.id_bussines,
                     sub: data.sub_bussines,
@@ -31,7 +58,7 @@ export const controllerGetInfo = async (req, res) => {
                     sub_category: data.subcategory_bussines,
                     location: data.direction_bussines,
                     photo: data.photo_bussines,
-                    products: []
+                    products: products
                 }))
 
                 return res.status(201).json({ok: true, message: 'Datos del negocio obtenidos', bussines: bussines[0], error: '', code: 201})

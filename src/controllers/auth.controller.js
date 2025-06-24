@@ -48,6 +48,7 @@ export const controllerLogin = async (req, res) => {
             const user = existing[0]
             const sub = user.sub_bussines
             const code = generateCodeOTP();
+            await sendOTP(phone, code)
             const expires = new Date(Date.now() + 10 * 60 * 1000);
             const sqlOTP = 'INSERT INTO login_tokens (sub_bussines, code_token, created_token, expires_token) VALUES (?, ?, NOW(), ?)'
             const [ otp ] = await pool.query(sqlOTP, [ sub, code, expires ])
