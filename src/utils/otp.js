@@ -14,7 +14,7 @@ export const sendOTP = async (phone, code) => {
             },
             body: JSON.stringify({
                 number: `51${phone}`,
-                text: `Bienvenido a Ándale socio(a):\nEste es tu código de verificación: *${otp}*`
+                text: `Bienvenido a Ándale socio(a):\nEste es tu código de verificación: *${code}*`
             })    
         })
 

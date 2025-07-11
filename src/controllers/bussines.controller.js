@@ -2,7 +2,7 @@ import path from 'path';
 import fs from 'fs';
 import pool from '../db/db.js';
 import jwt from 'jsonwebtoken'
-import { JWT_SECRET } from '../config.js';
+import { ENDPOINT, JWT_SECRET } from '../config.js';
 
 export const controllerGetInfo = async (req, res) => {
 
@@ -57,7 +57,7 @@ export const controllerGetInfo = async (req, res) => {
                     category: data.category_bussines,
                     sub_category: data.subcategory_bussines,
                     location: data.direction_bussines,
-                    photo: data.photo_bussines,
+                    photo: `${ENDPOINT}/account/photo/${data.sub_bussines}/${data.photo_bussines}`,
                     products: products
                 }))
 
@@ -66,6 +66,60 @@ export const controllerGetInfo = async (req, res) => {
         } catch (error) {
             return res.status(500).json({ok: false, message: error.message, error: error, code: 500})
         }
+}
+
+export const controllerUpdateInfo = async (req, res) => {
+
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ ok: false, message: 'Token no proporcionado', error: 'ERR_TOKEN_NOT_FOUND', code: 401 });
+
+        const token = authHeader.split(' ')[1];
+
+        try {
+            const decoded = jwt.verify(token, JWT_SECRET);
+            const sub = decoded.sub;
+            
+            const sqlInfo = 'SELECT * FROM bussines WHERE sub_bussines = ?'
+            const [ info ] = await pool.query(sqlInfo, [ sub ])
+
+            if (info.length === 0) return res.status(403).json({ok: false, message: 'No hay datos sobre el negocio', error: '', code: 403})
+        
+                // Mapeo de campos del body a columnas de la base de datos
+                const fieldMap = {
+                    name: 'name_bussines',
+                    text: 'text_bussines',
+                    category: 'category_bussines',
+                    subcategory: 'subcategory_bussines',
+                    location: 'direction_bussines',
+                };
+
+                const fieldsToUpdate = [];
+                const values = [];
+
+                for (const [key, column] of Object.entries(fieldMap)) {
+                    const value = req.body[key];
+                    if (value && typeof value === 'string' && value.trim() !== '') {
+                        fieldsToUpdate.push(`${column} = ?`);
+                        values.push(value.trim());
+                    }
+                }
+
+                if (fieldsToUpdate.length === 0) return res.status(400).json({ ok: false, message: 'No se proporcionó ningún dato válido para actualizar', code: 400});
+
+                    // Ejecutar el update
+                    values.push(sub);
+                    const updateQuery = `UPDATE bussines SET ${fieldsToUpdate.join(', ')} WHERE sub_bussines = ?`;
+                    await pool.query(updateQuery, values);
+
+                    return res.status(200).json({ok: true, message: 'Datos actualizados correctamente', code: 200});
+
+        } catch (error) {
+            
+            return res.status(500).json({ok: false, message: error.message, error: error, code: 500})
+
+        }
+
 }
 
 export const controllerGetPhoto = async (req, res) => {
@@ -95,4 +149,36 @@ export const controllerGetPhoto = async (req, res) => {
         return res.status(500).json({ok: false, message: error.message, error: error, code: 500})
     }
 
+}
+
+export const controllerUpdatePhoto = async (req, res) => {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ ok: false, message: 'Token no proporcionado', error: 'ERR_TOKEN_NOT_FOUND', code: 401 });
+
+        const token = authHeader.split(' ')[1]; 
+
+        try {
+            
+            const decoded = jwt.verify(token, JWT_SECRET);
+            const subUser = decoded.sub;
+            
+            if (!subUser) return res.status(401).json({ ok: false, message: 'Token inválido: falta sub_user', code: 401 });
+                        
+                if (!req.file) return res.status(404).json({ok: false, message: 'No se subió ninguna imagen', error: 'NOT_UPLOADED_IMAGE', code: 404})
+
+                    const fileUrl = `${req.file.filename}`;
+
+                    const sqlUpdatePhoto = 'UPDATE bussines SET photo_bussines = ? WHERE sub_bussines = ?'
+                    const [ updatePhoto ] = await pool.query(sqlUpdatePhoto, [ fileUrl, subUser ])
+
+                    if (!updatePhoto.affectedRows === 0) return res.status(404).json({ok: false, message: 'No se pudo actualizar la foto', error: 'NOT_UPDATE_PHOTO', code: 404})
+
+                        const photoURL = `${ENDPOINT}/account/photo/${subUser}/${fileUrl}`
+                        return res.status(200).json({ok: true, message: 'Se actualizó la imagen', photo: photoURL, error: '', code: 200})
+
+        } catch (error) {
+            console.error(error);
+            return res.status(500).json({ok: false, message: `Error: ${error.message}`, error: error, code: 500})
+        }
 }

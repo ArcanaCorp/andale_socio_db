@@ -8,6 +8,7 @@ export const {
   USER_DB,
   PASSWORD_DB,
   PORT_DB,
+  ENDPOINT,
   DATABASE_DB,
   JWT_SECRET,
   NODE_ENV,
