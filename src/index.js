@@ -19,6 +19,8 @@ import bussinesRoutes from './routes/bussines.routes.js'
 import partnersRoutes from './routes/partners.routes.js'
 import productsRoutes from './routes/product.routes.js'
 
+import analyticsRoutes from './routes/analytics.routes.js'
+
 //USE ROUTERS USER
 app.use('/api/v1/', indexRoutes)
 app.use('/api/v1/', authRoutes)
@@ -27,6 +29,8 @@ app.use('/api/v1/', bussinesRoutes)
 app.use('/api/v1/', partnersRoutes)
 
 app.use('/api/v1/', productsRoutes)
+
+app.use('/api/v1/', analyticsRoutes)
 
 // Manejo de errores
 app.use((err, req, res, next) => {
