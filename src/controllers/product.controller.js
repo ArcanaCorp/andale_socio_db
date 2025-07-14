@@ -5,7 +5,7 @@ import path from 'path'
 import fs from 'fs'
 
 export const controllerListProducts = async (req, res) => {
-
+    
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ ok: false, message: 'Token no proporcionado', error: 'ERR_TOKEN_NOT_FOUND', code: 401 });
@@ -16,11 +16,18 @@ export const controllerListProducts = async (req, res) => {
             
             const decoded = jwt.verify(token, JWT_SECRET);
             const sub = decoded.sub;
-                            
+                                
             if (!sub) return res.status(401).json({ ok: false, message: 'Token inválido: falta sub_user', code: 401 });
 
-                const sqlListProducts = 'SELECT p.*, pi.image_url, pi.is_main FROM products p INNER JOIN product_images pi ON p.id_product = pi.id_product WHERE p.sub_bussines = ? ORDER BY p.id_product, pi.is_main DESC'
-                const [ listProducts ] = await pool.query(sqlListProducts, [ sub ])
+                // LEFT JOIN permite que el producto aparezca aunque no tenga imágenes
+                const sqlListProducts = `
+                    SELECT p.*, pi.id_image, pi.image_url, pi.is_main 
+                    FROM products p 
+                    LEFT JOIN product_images pi ON p.id_product = pi.id_product 
+                    WHERE p.sub_bussines = ? 
+                    ORDER BY p.id_product, pi.is_main DESC
+                `;
+                const [listProducts] = await pool.query(sqlListProducts, [sub]);
 
                 // Agrupar imágenes por producto
                 const productsMap = new Map();
@@ -33,26 +40,30 @@ export const controllerListProducts = async (req, res) => {
                             text: row.text_product,
                             category: row.category_product,
                             amount: row.amount_product,
-                            price:  Number(row.price_product),
+                            price: Number(row.price_product).toFixed(2),
                             status: row.status_product,
                             images: []
                         });
                     }
 
-                    productsMap.get(row.id_product).images.push({
-                        filename: `${ENDPOINT}/product/photo/${sub}/${row.image_url}`,
-                        is_main: row.is_main === 1
-                    });
+                    // Si tiene imagen, agregarla
+                    if (row.id_image) {
+                        productsMap.get(row.id_product).images.push({
+                            id: row.id_image,
+                            filename: `${ENDPOINT}/product/photo/${sub}/${row.image_url}`,
+                            is_main: row.is_main === 1
+                        });
+                    }
                 }
 
                 const products = Array.from(productsMap.values());
 
-                return res.status(201).json({ok: true, message: `Se obtuvieron ${listProducts.length} productos`, products, length: listProducts.length, error: '', code: 201})
+                return res.status(200).json({ok: true, message: `Se obtuvieron ${products.length} productos`, products, length: products.length, error: '',code: 200});
 
         } catch (error) {
-            return res.status(500).json({ok: false, message: error.message, error: error, code: 500})
+            return res.status(500).json({ok: false, message: error.message, error: error, code: 500});
         }
-}
+};
 
 export const controllerListProduct = async (req, res) => {
 
@@ -80,6 +91,7 @@ export const controllerListProduct = async (req, res) => {
                     const product = listProduct[0]; // Producto principal
 
                     const images = listProduct.map(row => ({
+                        id: row.id_image,
                         image_url: row.image_url,
                         is_main: row.is_main
                     }));
@@ -115,7 +127,7 @@ export const controllerCreateProduct = async (req, res) => {
         const { name, text, category, amount, price } = req.body;
         const images = req.files; // Array de archivos
 
-            if (!name || !text || !category || !amount || !price || images.length === 0) return res.status(400).json({ ok: false, message: "Todos los campos son obligatorios" });
+            if (!name || !text || !category || !amount || !price) return res.status(400).json({ ok: false, message: "Todos los campos son obligatorios" });
         
             try {
                 
@@ -169,6 +181,7 @@ export const controllerUpdateProduct = async (req, res) => {
 
     const authHeader = req.headers.authorization;
     const { productId } = req.params;
+    const { column, value } = req.body;
 
     if (!productId || !authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ ok: false, message: 'Token no proporcionado', error: 'ERR_TOKEN_NOT_FOUND', code: 401 });
 
@@ -192,50 +205,12 @@ export const controllerUpdateProduct = async (req, res) => {
                     price: 'price_product'
                 }
 
-                const fieldsToUpdate = [];
-                const values = [];
+                const sqlUpdate = `UPDATE products SET ${fieldMap[column]} = ? WHERE id_product = ? AND sub_bussines = ?`
+                const [ update ] = await pool.query(sqlUpdate, [ value, productId, sub ])
 
-                for (const [key, column] of Object.entries(fieldMap)) {
-                    const value = req.body[key];
-                    if (value && typeof value === 'string' && value.trim() !== '') {
-                        fieldsToUpdate.push(`${column} = ?`);
-                        values.push(value.trim());
-                    }
-                }
+                if (update.affectedRows === 0) return res.status(403).json({ok: false, message: 'No se pudo actualizar los campos necesarios', error: '', code: 403})
 
-                if (fieldsToUpdate.length === 0) return res.status(400).json({ ok: false, message: 'No se proporcionó ningún dato válido para actualizar', code: 400});
-
-                    // Ejecutar el update
-                    values.push(productId);
-                    values.push(sub);
-                    const updateQuery = `UPDATE products SET ${fieldsToUpdate.join(', ')} WHERE id_product = ? AND sub_bussines = ?`;
-                    await pool.query(updateQuery, values);
-
-                    // Obtener los datos actualizados del producto
-                    const sqlGetUpdatedProduct = 'SELECT p.*, pi.image_url, pi.is_main FROM products p LEFT JOIN product_images pi ON pi.id_product = p.id_product WHERE p.id_product = ? AND p.sub_bussines = ?';
-                    const [updatedProduct] = await pool.query(sqlGetUpdatedProduct, [productId, sub]);
-
-                    if (!updatedProduct.length) return res.status(404).json({ ok: false, message: 'Producto no encontrado después de la actualización', code: 404 });
-
-                        const row = updatedProduct[0];
-
-                        const images = updatedProduct.map(row => ({
-                            filename: row.image_url,
-                            is_main: row.is_main === 1
-                        }));
-
-                        const productUpdated = {
-                            id: row.id_product,
-                            name: row.name_product,
-                            text: row.text_product,
-                            category: row.category_product,
-                            amount: row.amount_product,
-                            price:  Number(row.price_product),
-                            status: row.status_product,
-                            images: images
-                        }
-
-                        return res.status(200).json({ok: true, message: 'Datos actualizados correctamente', product: productUpdated, error: '', code: 200});
+                    return res.status(200).json({ok: true, message: 'Se actualizó con éxito el product', error: '', code: 200})
 
         } catch (error) {
             return res.status(500).json({ok: false, message: error.message, error: error, code: 500})
@@ -307,4 +282,48 @@ export const controllerPhotoProduct = async (req, res) => {
 
 }
 
-export const controllerUpdatePhotoProduct = async (req, res) => {}
+export const controllerDeletePhotoProduct = async (req, res) => {
+
+    const authHeader = req.headers.authorization;
+    const { productId } = req.params;
+    const { id } = req.body;
+
+    if (!productId || !authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ ok: false, message: 'Token no proporcionado', error: 'ERR_TOKEN_NOT_FOUND', code: 401 });
+
+        const token = authHeader.split(' ')[1];
+
+        try {
+            const decoded = jwt.verify(token, JWT_SECRET);
+            const sub = decoded.sub;
+            
+            const sqlInfo = 'SELECT * FROM bussines WHERE sub_bussines = ?'
+            const [ info ] = await pool.query(sqlInfo, [ sub ])
+
+            if (info.length === 0) return res.status(403).json({ok: false, message: 'No hay datos sobre el negocio', error: '', code: 403})
+
+                const [photo] = await pool.query('SELECT is_main FROM product_images WHERE id_image = ? AND id_product = ?', [id, productId]);
+
+                if (photo.length === 0) return res.status(404).json({ok: false, message: 'Imagen no encontrada', error: '', code: 404});
+                    
+                    const isMain = photo[0].is_main === 1;
+
+                    const sqlDeletePhoto = 'DELETE FROM product_images WHERE id_image = ? AND id_product = ?'
+                    const [ deletePhoto ] = await pool.query(sqlDeletePhoto, [ id, productId ])
+
+                    if (deletePhoto.affectedRows === 0) return res.status(403).json({ok: false, message: 'No se pudo eliminar la imagen', error: '', code: 403})
+
+                        if (isMain) {
+                            const [others] = await pool.query('SELECT id_image FROM product_images WHERE id_product = ? ORDER BY id_image ASC LIMIT 1', [productId]);
+                            if (others.length > 0) {
+                                const newMainId = others[0].id_image;
+                                await pool.query('UPDATE product_images SET is_main = 1 WHERE id_image = ?', [newMainId]);
+                            }
+                        }
+
+                        return res.status(200).json({ok: true, message: 'Se eliminó la imagen con éxito', error: '', code: 200})
+
+        } catch (error) {
+            return res.status(500).json({ok: false, message: error.message, error: error, code: 500})
+        }
+
+}

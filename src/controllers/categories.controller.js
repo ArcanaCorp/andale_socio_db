@@ -62,3 +62,62 @@ export const controllerCreateCategory = async (req, res) => {
         }
 
 }
+
+export const controllerDeleteCategory = async (req, res) => {
+
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ ok: false, message: 'Token no proporcionado', error: 'ERR_TOKEN_NOT_FOUND', code: 401 });
+
+        const token = authHeader.split(' ')[1]; 
+
+        try {
+
+            const decoded = jwt.verify(token, JWT_SECRET);
+            const sub = decoded.sub;
+                                        
+            if (!sub) return res.status(401).json({ ok: false, message: 'Token inválido: falta sub_user', code: 401 });
+
+                const { id } = req.params;
+
+                const sql = 'DELETE FROM bussines_category WHERE sub_bussines = ? AND id_bcategory = ?'
+                const [ consult ] = await pool.query(sql, [ sub, id ])
+                if (consult.affectedRows === 0) return res.status(404).json({ok: false, message: 'No se pudo eliminar la categoria', error: '', code: 404})
+            
+                    return res.status(201).json({ok: true, message: 'Se elimino con éxito la categoria', error: '', code: 201})
+
+        } catch (error) {
+            return res.status(500).json({ok: false, message: error.message, error: error, code: 500})
+        }
+
+}
+
+export const controllerUpdateCategory = async (req, res) => {
+
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ ok: false, message: 'Token no proporcionado', error: 'ERR_TOKEN_NOT_FOUND', code: 401 });
+
+        const token = authHeader.split(' ')[1]; 
+
+        try {
+
+            const decoded = jwt.verify(token, JWT_SECRET);
+            const sub = decoded.sub;
+                                        
+            if (!sub) return res.status(401).json({ ok: false, message: 'Token inválido: falta sub_user', code: 401 });
+
+                const { id } = req.params;
+                const { category } = req.body;
+
+                const sql = 'UPDATE bussines_category SET name_bcategory = ? WHERE sub_bussines = ? AND id_bcategory = ?'
+                const [ consult ] = await pool.query(sql, [ category, sub, id ])
+                if (consult.affectedRows === 0) return res.status(404).json({ok: false, message: 'No se pudo actualizar la categoria', error: '', code: 404})
+            
+                    return res.status(201).json({ok: true, message: 'Se actualizó con éxito la categoria', error: '', code: 201})
+
+        } catch (error) {
+            return res.status(500).json({ok: false, message: error.message, error: error, code: 500})
+        }
+
+}

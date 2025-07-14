@@ -1,24 +1,18 @@
-import jwt from 'jsonwebtoken'
 import pool from "../db/db.js";
-import { JWT_SECRET } from '../config.js';
 
 export const controllerAnalyticsSocials = async (req, res) => {
 
-    const { domain } = req.body;
-
-    const authHeader = req.headers.authorization;
+    const { slug, domain } = req.body;
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ ok: false, message: 'Token no proporcionado', error: 'ERR_TOKEN_NOT_FOUND', code: 401 });
-
-        const token = authHeader.split(' ')[1]; 
+    if (!slug || !domain) return res.status(401).json({ ok: false, message: 'Datos no proporcionados', error: 'ERR_TOKEN_NOT_FOUND', code: 401 });
 
         try {
-
-            const decoded = jwt.verify(token, JWT_SECRET);
-            const user = decoded.sub;
                         
-            if (!user) return res.status(401).json({ ok: false, message: 'Token inválido: falta sub_user', code: 401 });
+            const sqlExisting = 'SELECT sub_bussines FROM bussines WHERE short_bussines = ? OR sub_bussines = ?'
+            const [ existing ] = await pool.query(sqlExisting, [ slug, slug ]);
+            if (existing.length === 0) return res.status(401).json({ ok: false, message: 'Usuario no encontrado', error: 'ERR_TOKEN_NOT_FOUND', code: 401 });
 
+                const user = existing[0].sub_bussines;
                 const sql = 'INSERT INTO analytics_socials (sub_bussines, social_analytics_social, created_analytics_social) VALUES (?, ?, NOW())'
                 const [ add ] = await pool.query(sql, [ user, domain ])
 

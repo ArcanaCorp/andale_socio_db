@@ -152,6 +152,7 @@ export const controllerGetPhoto = async (req, res) => {
 }
 
 export const controllerUpdatePhoto = async (req, res) => {
+
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ ok: false, message: 'Token no proporcionado', error: 'ERR_TOKEN_NOT_FOUND', code: 401 });
@@ -174,11 +175,53 @@ export const controllerUpdatePhoto = async (req, res) => {
 
                     if (!updatePhoto.affectedRows === 0) return res.status(404).json({ok: false, message: 'No se pudo actualizar la foto', error: 'NOT_UPDATE_PHOTO', code: 404})
 
-                        const photoURL = `${ENDPOINT}/account/photo/${subUser}/${fileUrl}`
-                        return res.status(200).json({ok: true, message: 'Se actualizó la imagen', photo: photoURL, error: '', code: 200})
+                        //const photoURL = `${ENDPOINT}/account/photo/${subUser}/${fileUrl}`
+                        const payload = {
+                            sub: subUser
+                        }
+                        const newToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '1y' })
+                        return res.status(200).json({ok: true, message: 'Se actualizó la imagen', token: newToken, error: '', code: 200})
 
         } catch (error) {
             console.error(error);
             return res.status(500).json({ok: false, message: `Error: ${error.message}`, error: error, code: 500})
+        }
+}
+
+export const controllerEditAccount = async (req, res) => {
+
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ ok: false, message: 'Token no proporcionado', error: 'ERR_TOKEN_NOT_FOUND', code: 401 });
+
+        const token = authHeader.split(' ')[1];
+
+        const { column, value } = req.body;
+
+        try {
+            
+            const decoded = jwt.verify(token, JWT_SECRET);
+            const user = decoded.sub;
+            
+            if (!user) return res.status(401).json({ ok: false, message: 'Token inválido: falta sub_user', code: 401 });
+
+                const sqlExisting = 'SELECT * FROM bussines WHERE sub_bussines = ?'
+                const [ existing ] = await pool.query(sqlExisting, [ user ])
+
+                if (existing.length === 0) return res.status(401).json({ ok: false, message: 'Token inválido: falta sub_user', code: 401 });
+
+                    const sqlUpdate = `UPDATE bussines SET ${column} = ? WHERE sub_bussines = ?`
+                    const [ update ] = await pool.query(sqlUpdate, [ value, user ])
+
+                    if (update.affectedRows === 0) return res.status(401).json({ ok: false, message: 'Token inválido: falta sub_user', code: 401 });
+
+                        const payload = {
+                            sub: user
+                        }
+                        const newToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '1y' })
+                        return res.status(200).json({ ok: true, message: 'Se actualizó tu perfil con éxito', token: newToken, code: 200 });
+
+        } catch (error) {
+            return res.status(500).json({ok: false, message: `Error: ${error.message}`, error: error, code: 500})            
         }
 }
