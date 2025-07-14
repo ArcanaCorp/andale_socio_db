@@ -32,7 +32,7 @@ export const controllerPartnerId = async (req, res) => {
                 category: info.category_bussines,
                 sub_category: info.subcategory_bussines,
                 location: info.direction_bussines,
-                photo: `${ENDPOINT}/account/photo/${info.sub_bussines}/${info.photo_bussines}`,
+                photo: `${ENDPOINT || 'http://'}/account/photo/${info.sub_bussines}/${info.photo_bussines}`,
                 products,
                 sociales,
                 categories
